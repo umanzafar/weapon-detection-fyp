@@ -1,0 +1,2 @@
+{ "name": "weapon-detection-console", "private": true, "type": "module", "scripts": { "test": "node --test tests/webapp.test.mjs" }, "devDependencies": { "onnxruntime-web": "1.20.1" } }
+
