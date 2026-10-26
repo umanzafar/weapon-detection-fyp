@@ -1,48 +1,152 @@
-// MLX90614 live stream for the fusion alarm demo (05_Code/fusion_alarm_demo.py).
-// Same wiring as mlx90614_test: VIN->3V3, GND->GND, SDA->D21, SCL->D22.
+// MLX90614 live stream + pan/tilt servo control for the fusion console
+// (12_WebApp/console.html, also 05_Code/fusion_alarm_demo.py for the sensor part).
 //
-// Prints one machine-readable line every PERIOD_MS:
-//   T,<ambient C>,<object C>
-// Anything else on the line (boot messages, errors) is ignored by the laptop side.
+// Wiring:  MLX90614 VIN->3V3, GND->GND, SDA->D21, SCL->D22
+//          Pan servo signal -> GPIO18, tilt servo signal -> GPIO19
+//          Servo red/brown from the SEPARATE 5V supply, its GND tied to an ESP32 GND
+//          (servos on the ESP32's own 5V pin brown it out and it reboots).
 //
-// Library needed: "Adafruit MLX90614 Library" (accept the Adafruit BusIO dependency).
+// Output lines:
+//   T,<ambient C>,<object C>     every 100 ms
+//   S,<pan>,<tilt>,<mode>        every 200 ms   (mode: PATROL / HOLD / AIM)
+// Input commands (one per line):
+//   P            patrol: slow sweep (the default at boot)
+//   H            hold the current position
+//   C            centre (90, 90) and hold
+//   A<pan>,<tilt>  glide to that angle and hold, e.g. A75,95
+// Any mode except PATROL falls back to PATROL after CMD_TIMEOUT_MS without a
+// command, so a closed browser tab never leaves the gimbal frozen.
+//
+// Libraries: "Adafruit MLX90614 Library" (+ Adafruit BusIO), "ESP32Servo".
 
 #include <Wire.h>
 #include <Adafruit_MLX90614.h>
+#include <ESP32Servo.h>
 
-const int SDA_PIN = 21;
-const int SCL_PIN = 22;
-const unsigned long PERIOD_MS = 100; // 10 Hz - fast enough for an "instant" alarm
+const int SDA_PIN = 21, SCL_PIN = 22;
+const int PAN_PIN = 18, TILT_PIN = 19;
+
+// Same window as servo_bringup_test, known not to hit the bracket's stops.
+const int PAN_MIN = 60, PAN_MAX = 120;
+const int TILT_MIN = 70, TILT_MAX = 110;
+
+const unsigned long TEMP_PERIOD_MS = 100;
+const unsigned long STATUS_PERIOD_MS = 200;
+const unsigned long SERVO_TICK_MS = 20;
+const float MAX_SPEED_DPS = 90.0;      // glide speed for aim / centre moves
+const float PATROL_SPEED_DPS = 25.0;   // slow, readable sweep
+const unsigned long CMD_TIMEOUT_MS = 3000;
 
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
+Servo panServo, tiltServo;
+bool sensorOk = false;
+
+enum Mode { PATROL, HOLD, AIM };
+Mode mode = PATROL;
+float pan = 90, tilt = 90;             // current commanded angle
+float panTarget = 90, tiltTarget = 90;
+int patrolDir = 1;
+unsigned long lastCmdAt = 0, lastTemp = 0, lastStatus = 0, lastTick = 0;
+char cmd[24];
+int cmdLen = 0;
+
+const char *modeName() { return mode == PATROL ? "PATROL" : mode == HOLD ? "HOLD" : "AIM"; }
+
+float stepToward(float cur, float target, float maxStep) {
+  float d = target - cur;
+  if (d > maxStep) return cur + maxStep;
+  if (d < -maxStep) return cur - maxStep;
+  return target;
+}
+
+void handleCommand(const char *c) {
+  lastCmdAt = millis();
+  switch (c[0]) {
+    case 'P': case 'p': mode = PATROL; break;
+    case 'H': case 'h': mode = HOLD; panTarget = pan; tiltTarget = tilt; break;
+    case 'C': case 'c': mode = AIM; panTarget = 90; tiltTarget = 90; break;
+    case 'A': case 'a': {
+      int p, t;
+      if (sscanf(c + 1, "%d,%d", &p, &t) == 2) {
+        mode = AIM;
+        panTarget = constrain(p, PAN_MIN, PAN_MAX);
+        tiltTarget = constrain(t, TILT_MIN, TILT_MAX);
+      }
+      break;
+    }
+  }
+}
+
+void readCommands() {
+  while (Serial.available()) {
+    char ch = Serial.read();
+    if (ch == '\n' || ch == '\r') {
+      if (cmdLen > 0) { cmd[cmdLen] = 0; handleCommand(cmd); cmdLen = 0; }
+    } else if (cmdLen < (int)sizeof(cmd) - 1) {
+      cmd[cmdLen++] = ch;
+    }
+  }
+}
+
+void updateServos(unsigned long now) {
+  float dt = (now - lastTick) / 1000.0;
+  lastTick = now;
+  if (mode != PATROL && now - lastCmdAt > CMD_TIMEOUT_MS) mode = PATROL;
+
+  if (mode == PATROL) {
+    pan += patrolDir * PATROL_SPEED_DPS * dt;
+    if (pan >= PAN_MAX) { pan = PAN_MAX; patrolDir = -1; }
+    if (pan <= PAN_MIN) { pan = PAN_MIN; patrolDir = 1; }
+    tilt = stepToward(tilt, 90, MAX_SPEED_DPS * dt);
+  } else {
+    pan = stepToward(pan, panTarget, MAX_SPEED_DPS * dt);
+    tilt = stepToward(tilt, tiltTarget, MAX_SPEED_DPS * dt);
+  }
+  panServo.write((int)(pan + 0.5));
+  tiltServo.write((int)(tilt + 0.5));
+}
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  // Printed before any I2C call, so a blank Serial Monitor rules the sensor out
-  // and points at serial/port/baud instead.
+  // Printed before any I2C or servo call, so a blank Serial Monitor points at
+  // serial/port/baud rather than the sensor or the servos.
   Serial.println();
-  Serial.println("=== BOOT OK - mlx90614_stream ===");
+  Serial.println("=== BOOT OK - mlx90614_stream + servos ===");
+
+  // Plain attach(), no manual timer allocation: that froze the servos before.
+  panServo.attach(PAN_PIN);
+  tiltServo.attach(TILT_PIN);
+  panServo.write(90);
+  tiltServo.write(90);
+  Serial.println("Servos attached (pan GPIO18, tilt GPIO19)");
 
   Wire.begin(SDA_PIN, SCL_PIN);
   Wire.setTimeOut(200); // don't block forever if an I2C line is stuck low
-
-  if (!mlx.begin()) {
-    Serial.println("MLX90614 NOT FOUND - check SDA->D21, SCL->D22, VIN->3V3.");
-    while (true) delay(5000);
-  }
-  Serial.println("MLX90614 OK - streaming T,ambient,object");
+  sensorOk = mlx.begin();
+  // The servos keep working without the sensor, so this is no longer fatal.
+  Serial.println(sensorOk ? "MLX90614 OK - streaming T,ambient,object"
+                          : "MLX90614 NOT FOUND - check SDA->D21, SCL->D22, VIN->3V3. Servos still run.");
+  lastTick = millis();
 }
 
 void loop() {
-  float ambient = mlx.readAmbientTempC();
-  float object = mlx.readObjectTempC();
+  unsigned long now = millis();
+  readCommands();
 
-  if (isnan(ambient) || isnan(object)) {
-    Serial.println("ERR,read failed (NaN)");
-  } else {
-    Serial.printf("T,%.2f,%.2f\n", ambient, object);
+  if (now - lastTick >= SERVO_TICK_MS) updateServos(now);
+
+  if (sensorOk && now - lastTemp >= TEMP_PERIOD_MS) {
+    lastTemp = now;
+    float ambient = mlx.readAmbientTempC();
+    float object = mlx.readObjectTempC();
+    if (isnan(ambient) || isnan(object)) Serial.println("ERR,read failed (NaN)");
+    else Serial.printf("T,%.2f,%.2f\n", ambient, object);
   }
-  delay(PERIOD_MS);
+
+  if (now - lastStatus >= STATUS_PERIOD_MS) {
+    lastStatus = now;
+    Serial.printf("S,%d,%d,%s\n", (int)(pan + 0.5), (int)(tilt + 0.5), modeName());
+  }
 }

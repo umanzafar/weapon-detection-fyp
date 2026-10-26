@@ -83,6 +83,45 @@ test("thermal state and decision table", () => {
   for (const s of [WARM, COLD, NEUTRAL, OFFLINE]) assert.equal(decide(false, s), CLEAR);
 });
 
+// ---- servo gimbal
+test("servo: status lines parse and are not mistaken for temperature", async () => {
+  const { parseServoLine } = await import("../js/serial.js");
+  assert.deepEqual(parseServoLine("S,84,90,PATROL\r"), { pan: 84, tilt: 90, mode: "PATROL" });
+  assert.equal(parseServoLine("T,31.4,31.2"), null);
+  assert.equal(parseThermalLine("S,84,90,PATROL"), null);
+});
+
+test("servo: lock mode patrols, tracks a box, holds, then patrols again", async () => {
+  const { ServoController } = await import("../js/servo.js");
+  const s = new ServoController();
+  let t = 0;
+  const step = boxes => { t += 100; return s.tick(boxes, 640, 480, t); };
+  assert.equal(step([]), "P");
+  assert.equal(s.state, "PATROL");
+  // Object on the left of the frame -> pan above 90 (gimbal's left).
+  const left = [{ x1: 40, y1: 200, x2: 120, y2: 280, conf: 0.9, cls: 3 }];
+  const cmd = step(left);
+  assert.match(cmd, /^A\d+,\d+$/);
+  assert.ok(+cmd.slice(1).split(",")[0] > 100, cmd);
+  assert.equal(s.state, "TRACKING");
+  assert.equal(step([]), "H", "brief loss holds position");
+  for (let i = 0; i < 25; i++) step([]);
+  assert.equal(s.state, "PATROL");
+  s.reversePan = true;
+  assert.ok(s.boxToAngles(left[0], 640, 480).pan < 80, "reverse flips direction");
+});
+
+test("servo: keepalive is re-sent at least once a second, angles stay in range", async () => {
+  const { ServoController, PAN_MIN, PAN_MAX, TILT_MIN, TILT_MAX } = await import("../js/servo.js");
+  const s = new ServoController();
+  s.mode = "center";
+  let sent = 0;
+  for (let t = 0; t < 5000; t += 100) if (s.tick([], 640, 480, t)) sent++;
+  assert.ok(sent >= 5, `sent ${sent} in 5 s`);
+  const corner = s.boxToAngles({ x1: 0, y1: 0, x2: 1, y2: 1 }, 640, 480);
+  assert.ok(corner.pan >= PAN_MIN && corner.pan <= PAN_MAX && corner.tilt >= TILT_MIN && corner.tilt <= TILT_MAX);
+});
+
 // Detector and sensor both at 10 Hz, as in the real demo.
 function rig() {
   const th = new ThermalBuffer();

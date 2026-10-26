@@ -101,6 +101,16 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .ticks { display: flex; justify-content: space-between; font-size: .68rem; color: var(--muted); margin-top: .2rem; }
 #spark { width: 100%; height: 90px; margin-top: .3rem; }
 
+.servo { gap: .55rem; }
+.servo-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.servo-opts { display: flex; flex-wrap: wrap; gap: .3rem 1rem; }
+/* top-down view of the pan/tilt window: dot = where the gimbal points */
+.gimbal { position: relative; height: 54px; border: 1px solid var(--line); border-radius: 8px; background:
+  linear-gradient(var(--line), var(--line)) center / 1px 100% no-repeat, linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat, var(--panel-2); }
+.gimbal-dot { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent);
+  transform: translate(-50%, -50%); left: 50%; top: 50%; transition: left .2s linear, top .2s linear; }
+.gimbal-dot.track { background: var(--alarm); box-shadow: 0 0 12px var(--alarm); }
+.gimbal-dot.off { background: var(--muted); box-shadow: none; }
 .settings summary { cursor: pointer; font-weight: 600; }
 .settings[open] { gap: .7rem; }
 .set { display: grid; gap: .25rem; font-size: .88rem; }

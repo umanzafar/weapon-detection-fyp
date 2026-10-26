@@ -86,6 +86,29 @@
       <div class="det mono" id="dec-rule">shape AND NOT body-heat</div>
     </div>
 
+    <div class="card servo">
+      <div class="lbl">Servo gimbal</div>
+      <div class="servo-row">
+        <span id="servo-pill" class="pill grey">OFFLINE</span>
+        <span class="mono det" id="servo-pos">pan --° · tilt --°</span>
+      </div>
+      <div class="gimbal" aria-hidden="true"><div class="gimbal-dot" id="gimbal-dot"></div></div>
+      <select id="servo-mode" aria-label="Servo mode">
+        <option value="lock">Patrol + lock on target</option>
+        <option value="patrol">Patrol only</option>
+        <option value="center">Hold center</option>
+        <option value="manual">Manual</option>
+      </select>
+      <div id="servo-manual" class="set" hidden>
+        <label for="pan">Pan <b class="mono" id="pan-v"></b></label><input type="range" id="pan" min="60" max="120" step="1" value="90">
+        <label for="tilt">Tilt <b class="mono" id="tilt-v"></b></label><input type="range" id="tilt" min="70" max="110" step="1" value="90">
+      </div>
+      <div class="servo-opts">
+        <label class="switch"><input type="checkbox" id="rev-pan"><span>Reverse pan</span></label>
+        <label class="switch"><input type="checkbox" id="rev-tilt"><span>Reverse tilt</span></label>
+      </div>
+    </div>
+
     <details class="card settings">
       <summary>Settings</summary>
       <div class="set">

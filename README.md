@@ -20,8 +20,10 @@ ESP32 reads their temperature. The alarm fires only when both agree, so a finger
 
 Needs **Chrome or Edge on a laptop** (Web Serial is not available in Firefox, Safari or on phones).
 
-1. Flash `firmware/mlx90614_stream/mlx90614_stream.ino` to the ESP32
-   (wiring: VIN→3V3, GND→GND, SDA→D21, SCL→D22). Close Arduino's Serial Monitor afterwards.
+1. Flash `firmware/mlx90614_stream/mlx90614_stream.ino` to the ESP32 (libraries: Adafruit MLX90614,
+   ESP32Servo). Wiring: sensor VIN→3V3, GND→GND, SDA→D21, SCL→D22; pan servo signal→GPIO18,
+   tilt servo signal→GPIO19, servo power from a **separate 5 V supply** whose GND is tied to an
+   ESP32 GND. Close Arduino's Serial Monitor afterwards.
 2. Open the GitHub Pages link, or locally: `python -m http.server 8000` in this folder, then
    `http://localhost:8000`.
 3. **Start camera** → **Connect sensor** (pick the CP210x port) → point the sensor at empty space →
@@ -30,6 +32,13 @@ Needs **Chrome or Edge on a laptop** (Web Serial is not available in Firefox, Sa
 No ESP32? Tick **Simulate** to drive the temperature with a slider (the screen is labelled SIMULATED).
 
 Shortcuts: `C` calibrate, `M` mute, `F` fullscreen.
+
+**Servo gimbal.** The servos start patrolling (slow left–right sweep) as soon as the ESP32 powers up.
+Once connected, the console's *Servo gimbal* card picks the mode: **Patrol + lock on target**
+(default: turns to the detected weapon and follows it, back to patrol 2 s after it leaves view),
+**Patrol only**, **Hold center**, or **Manual**. If the gimbal turns the wrong way, tick *Reverse pan*
+/ *Reverse tilt*. If the infrared sensor is mounted on the gimbal, use *Hold center* for the finger
+and gun tests, because the sensor must stay 1–3 cm from the object.
 
 ## How it works
 

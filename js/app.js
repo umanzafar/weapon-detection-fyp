@@ -10,6 +10,7 @@ import {
   ThermalBuffer, FusionEngine,
 } from "./fusion.js";
 import { ThermalSerial, serialSupported } from "./serial.js";
+import { ServoController, PAN_MIN, PAN_MAX, TILT_MIN, TILT_MAX } from "./servo.js";
 
 const $ = id => document.getElementById(id);
 const video = $("video"), overlay = $("overlay"), octx = overlay.getContext("2d");
@@ -188,9 +189,41 @@ const sensor = new ThermalSerial(
   ({ connected, message }) => {
     chip("st-sensor", connected ? "warn" : "", connected ? "Sensor…" : "Sensor");
     $("btn-sensor").textContent = connected ? "Disconnect sensor" : "Connect sensor";
-    if (!connected) { thermal.clear(); if (message !== "Disconnected") toast(message); }
+    if (!connected) { thermal.clear(); servoSeen = null; if (message !== "Disconnected") toast(message); }
   },
+  s => (servoSeen = { ...s, at: performance.now() }),
 );
+
+// ------------------------------------------------------------------ servo gimbal (10 Hz)
+const servo = new ServoController();
+let servoSeen = null;   // last "S,pan,tilt,mode" from the firmware
+
+setInterval(() => {
+  if (!sensor.port) return;
+  const cmd = servo.tick(stream ? boxes : [], video.videoWidth, video.videoHeight);
+  if (cmd) sensor.send(cmd);
+}, 100);
+
+function renderServo() {
+  const fresh = servoSeen && performance.now() - servoSeen.at < 1500;
+  const pill = $("servo-pill"), dot = $("gimbal-dot");
+  if (!fresh) {
+    pill.className = "pill grey";
+    pill.textContent = sensor.port ? "NO SERVO DATA" : "OFFLINE";
+    $("servo-pos").textContent = sensor.port ? "Flash the servo firmware" : "Connect the ESP32";
+    dot.className = "gimbal-dot off";
+    return;
+  }
+  const label = servo.state === "TRACKING" ? "LOCKED ON" : servo.state;
+  pill.className = "pill " + (servo.state === "TRACKING" ? "red" : servo.state === "PATROL" ? "blue" : "grey");
+  pill.textContent = label;
+  $("servo-pos").textContent = `pan ${servoSeen.pan}° · tilt ${servoSeen.tilt}°`;
+  // Pan 120° is the gimbal's left; draw it on the left.
+  dot.style.left = `${(PAN_MAX - servoSeen.pan) / (PAN_MAX - PAN_MIN) * 100}%`;
+  dot.style.top = `${(servoSeen.tilt - TILT_MIN) / (TILT_MAX - TILT_MIN) * 100}%`;
+  dot.className = "gimbal-dot" + (servo.state === "TRACKING" ? " track" : "");
+}
+setInterval(renderServo, 100);
 
 async function toggleSensor() {
   if (sensor.port) { await sensor.disconnect(); return; }
@@ -355,6 +388,11 @@ function bindRange(id, fmt, apply) {
 bindRange("conf", v => `${Math.round(v * 100)}%`, v => (settings.conf = v));
 bindRange("warm", v => `${v.toFixed(1)} °C`, v => (engine.settings.warmDelta = v));
 bindRange("cold", v => `${v.toFixed(1)} °C`, v => (engine.settings.coldDelta = v));
+bindRange("pan", v => `${v}°`, v => (servo.manual.pan = v));
+bindRange("tilt", v => `${v}°`, v => (servo.manual.tilt = v));
+$("servo-mode").addEventListener("change", e => { servo.mode = e.target.value; $("servo-manual").hidden = servo.mode !== "manual"; });
+$("rev-pan").addEventListener("change", e => (servo.reversePan = e.target.checked));
+$("rev-tilt").addEventListener("change", e => (servo.reverseTilt = e.target.checked));
 $("sim-t").addEventListener("input", () => ($("sim-v").textContent = `${parseFloat($("sim-t").value).toFixed(1)} °C`));
 $("mode").addEventListener("change", e => (engine.settings.strict = e.target.value === "strict"));
 $("size").addEventListener("change", e => { settings.size = +e.target.value; startWorker(); });
