@@ -9,8 +9,9 @@
 //   center  - hold straight ahead
 //   manual  - hold the slider angles
 //
-// The firmware falls back to patrol after 3 s without a command, so every
-// non-patrol state is re-sent at least every KEEPALIVE_MS.
+// Nothing is sent until armed (the Calibrate button), so the gimbal stays still
+// at power-up. The firmware stops and waits after 3 s without a command, so
+// every state is re-sent at least every KEEPALIVE_MS.
 
 export const PAN_MIN = 60, PAN_MAX = 120, TILT_MIN = 70, TILT_MAX = 110;
 const KEEPALIVE_MS = 1000, AIM_MIN_INTERVAL_MS = 100, LOST_MS = 2000, SMOOTH = 0.35;
@@ -20,6 +21,7 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export class ServoController {
   constructor() {
     this.mode = "lock";
+    this.armed = false;         // set by Calibrate; until then tick() sends nothing
     this.reversePan = false;
     this.reverseTilt = false;
     this.manual = { pan: 90, tilt: 90 };
@@ -27,7 +29,7 @@ export class ServoController {
     this.lastSeenAt = -Infinity;
     this.lastCmd = null;
     this.lastSentAt = -Infinity;
-    this.state = "PATROL";      // what the console shows: PATROL / TRACKING / HOLD / CENTER / MANUAL
+    this.state = "WAIT";        // what the console shows: WAIT / PATROL / TRACKING / HOLD / CENTER / MANUAL
   }
 
   // Camera's ~60° horizontal view maps onto the 60° pan window, so the
@@ -54,6 +56,7 @@ export class ServoController {
 
   // boxes: detector boxes in frame pixels; w/h: frame size. Call ~10x per second.
   tick(boxes, w, h, t = performance.now()) {
+    if (!this.armed) { this.state = "WAIT"; this.aim = null; return null; }
     if (this.mode === "patrol") { this.state = "PATROL"; this.aim = null; return this._emit("P", t); }
     if (this.mode === "center") { this.state = "CENTER"; this.aim = null; return this._emit("C", t); }
     if (this.mode === "manual") {

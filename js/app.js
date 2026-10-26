@@ -189,7 +189,7 @@ const sensor = new ThermalSerial(
   ({ connected, message }) => {
     chip("st-sensor", connected ? "warn" : "", connected ? "Sensor…" : "Sensor");
     $("btn-sensor").textContent = connected ? "Disconnect sensor" : "Connect sensor";
-    if (!connected) { thermal.clear(); servoSeen = null; if (message !== "Disconnected") toast(message); }
+    if (!connected) { thermal.clear(); servoSeen = null; servo.armed = false; if (message !== "Disconnected") toast(message); }
   },
   s => (servoSeen = { ...s, at: performance.now() }),
 );
@@ -211,6 +211,13 @@ function renderServo() {
     pill.className = "pill grey";
     pill.textContent = sensor.port ? "NO SERVO DATA" : "OFFLINE";
     $("servo-pos").textContent = sensor.port ? "Flash the servo firmware" : "Connect the ESP32";
+    dot.className = "gimbal-dot off";
+    return;
+  }
+  if (servo.state === "WAIT") {
+    pill.className = "pill amber";
+    pill.textContent = "WAITING";
+    $("servo-pos").textContent = "Press Calibrate to start the servos";
     dot.className = "gimbal-dot off";
     return;
   }
@@ -409,7 +416,8 @@ $("cam-select").addEventListener("change", () => stream && startCamera());
 $("btn-sensor").addEventListener("click", toggleSensor);
 $("btn-cal").addEventListener("click", () => {
   const b = thermal.calibrate();
-  toast(b == null ? "No sensor reading yet." : `Background set to ${b.toFixed(2)} °C`, 2500);
+  if (b != null && sensor.port) servo.armed = true;
+  toast(b == null ? "No sensor reading yet." : `Background set to ${b.toFixed(2)} °C${servo.armed ? " · servos started" : ""}`, 2500);
 });
 $("sim").addEventListener("change", e => setSim(e.target.checked));
 $("btn-csv").addEventListener("click", exportCsv);

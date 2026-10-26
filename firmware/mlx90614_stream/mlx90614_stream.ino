@@ -8,14 +8,16 @@
 //
 // Output lines:
 //   T,<ambient C>,<object C>     every 100 ms
-//   S,<pan>,<tilt>,<mode>        every 200 ms   (mode: PATROL / HOLD / AIM)
+//   S,<pan>,<tilt>,<mode>        every 200 ms   (mode: WAIT / PATROL / HOLD / AIM)
 // Input commands (one per line):
-//   P            patrol: slow sweep (the default at boot)
+//   P            patrol: slow sweep
 //   H            hold the current position
 //   C            centre (90, 90) and hold
 //   A<pan>,<tilt>  glide to that angle and hold, e.g. A75,95
-// Any mode except PATROL falls back to PATROL after CMD_TIMEOUT_MS without a
-// command, so a closed browser tab never leaves the gimbal frozen.
+// At boot the servos are not driven at all (WAIT): they stay exactly where they
+// are until the console sends its first command, which it only does after
+// Calibrate. After CMD_TIMEOUT_MS without a command the gimbal stops where it is
+// and goes back to WAIT, so a closed browser tab leaves it still, not sweeping.
 //
 // Libraries: "Adafruit MLX90614 Library" (+ Adafruit BusIO), "ESP32Servo".
 
@@ -41,8 +43,9 @@ Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 Servo panServo, tiltServo;
 bool sensorOk = false;
 
-enum Mode { PATROL, HOLD, AIM };
-Mode mode = PATROL;
+enum Mode { WAIT, PATROL, HOLD, AIM };
+Mode mode = WAIT;
+bool servosAttached = false;
 float pan = 90, tilt = 90;             // current commanded angle
 float panTarget = 90, tiltTarget = 90;
 int patrolDir = 1;
@@ -50,7 +53,21 @@ unsigned long lastCmdAt = 0, lastTemp = 0, lastStatus = 0, lastTick = 0;
 char cmd[24];
 int cmdLen = 0;
 
-const char *modeName() { return mode == PATROL ? "PATROL" : mode == HOLD ? "HOLD" : "AIM"; }
+const char *modeName() {
+  return mode == WAIT ? "WAIT" : mode == PATROL ? "PATROL" : mode == HOLD ? "HOLD" : "AIM";
+}
+
+// Attached once, on the first command, never detached: before this the servo
+// pins carry no signal, so the servos don't jump or move at power-up.
+void attachServos() {
+  if (servosAttached) return;
+  panServo.attach(PAN_PIN);
+  tiltServo.attach(TILT_PIN);
+  panServo.write(90);
+  tiltServo.write(90);
+  servosAttached = true;
+  Serial.println("Servos armed (pan GPIO18, tilt GPIO19)");
+}
 
 float stepToward(float cur, float target, float maxStep) {
   float d = target - cur;
@@ -60,7 +77,9 @@ float stepToward(float cur, float target, float maxStep) {
 }
 
 void handleCommand(const char *c) {
+  if (!strchr("PpHhCcAa", c[0])) return;
   lastCmdAt = millis();
+  attachServos();
   switch (c[0]) {
     case 'P': case 'p': mode = PATROL; break;
     case 'H': case 'h': mode = HOLD; panTarget = pan; tiltTarget = tilt; break;
@@ -91,7 +110,8 @@ void readCommands() {
 void updateServos(unsigned long now) {
   float dt = (now - lastTick) / 1000.0;
   lastTick = now;
-  if (mode != PATROL && now - lastCmdAt > CMD_TIMEOUT_MS) mode = PATROL;
+  if (mode != WAIT && now - lastCmdAt > CMD_TIMEOUT_MS) mode = WAIT;
+  if (mode == WAIT) return;              // not driven, or stopped where it is
 
   if (mode == PATROL) {
     pan += patrolDir * PATROL_SPEED_DPS * dt;
@@ -115,12 +135,9 @@ void setup() {
   Serial.println();
   Serial.println("=== BOOT OK - mlx90614_stream + servos ===");
 
-  // Plain attach(), no manual timer allocation: that froze the servos before.
-  panServo.attach(PAN_PIN);
-  tiltServo.attach(TILT_PIN);
-  panServo.write(90);
-  tiltServo.write(90);
-  Serial.println("Servos attached (pan GPIO18, tilt GPIO19)");
+  // Servos are attached later, by attachServos(), with plain attach() and no
+  // manual timer allocation: that froze the servos before.
+  Serial.println("Servos waiting - press Calibrate in the console to start them");
 
   Wire.begin(SDA_PIN, SCL_PIN);
   Wire.setTimeOut(200); // don't block forever if an I2C line is stuck low

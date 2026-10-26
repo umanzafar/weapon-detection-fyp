@@ -96,6 +96,9 @@ test("servo: lock mode patrols, tracks a box, holds, then patrols again", async 
   const s = new ServoController();
   let t = 0;
   const step = boxes => { t += 100; return s.tick(boxes, 640, 480, t); };
+  assert.equal(step([]), null, "nothing sent before Calibrate");
+  assert.equal(s.state, "WAIT");
+  s.armed = true;
   assert.equal(step([]), "P");
   assert.equal(s.state, "PATROL");
   // Object on the left of the frame -> pan above 90 (gimbal's left).
@@ -115,6 +118,7 @@ test("servo: keepalive is re-sent at least once a second, angles stay in range",
   const { ServoController, PAN_MIN, PAN_MAX, TILT_MIN, TILT_MAX } = await import("../js/servo.js");
   const s = new ServoController();
   s.mode = "center";
+  s.armed = true;
   let sent = 0;
   for (let t = 0; t < 5000; t += 100) if (s.tick([], 640, 480, t)) sent++;
   assert.ok(sent >= 5, `sent ${sent} in 5 s`);
