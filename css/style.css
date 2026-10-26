@@ -25,6 +25,8 @@ button, select, input { font: inherit; color: inherit; }
 .brand h1 { margin: 0; font: 800 1.35rem/1.1 var(--display); font-stretch: 80%; letter-spacing: .01em; }
 .brand p { margin: 0; color: var(--muted); font-size: .82rem; }
 .status { display: flex; flex-wrap: wrap; gap: .45rem; }
+.back { margin-left: auto; color: var(--muted); text-decoration: none; font-size: .88rem; }
+.back:hover { color: var(--ink); }
 .chip { display: inline-flex; align-items: center; gap: .45rem; padding: .25rem .7rem; border: 1px solid var(--line);
   border-radius: 999px; font: 500 .78rem var(--mono); color: var(--muted); background: var(--panel); }
 .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }

@@ -1,126 +1,252 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Weapon Detection Console</title>
-<meta name="description" content="Live RGB + thermal sensor fusion for concealed weapon detection. MUST FYP 2026.">
+<title>Concealed Weapon Detection</title>
+<meta name="description" content="RGB camera + infrared sensor fusion for concealed weapon detection. Final Year Project, Computer Systems Engineering, MUST.">
+<meta property="og:title" content="Concealed Weapon Detection Â· RGB + Thermal Fusion">
+<meta property="og:description" content="A camera finds the gun shape, an infrared sensor checks its temperature. The alarm fires only when both agree.">
+<meta property="og:image" content="assets/console-preview.jpg">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g'%3E%3Cstop offset='0' stop-color='%2300f'/%3E%3Cstop offset='.5' stop-color='%23ff0'/%3E%3Cstop offset='1' stop-color='%23f00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='url(%23g)'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="css/style.css">
-<link rel="modulepreload" href="js/fusion.js">
+<link rel="stylesheet" href="css/site.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="brand">
-    <div class="logo" aria-hidden="true"></div>
-    <div><h1>Concealed Weapon Detection</h1><p>RGB camera + infrared sensor fusion · MUST FYP 2026</p></div>
+
+<nav class="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top"><span class="logo" aria-hidden="true"></span>Weapon Detection</a>
+    <div class="links">
+      <a href="#how">How it works</a><a href="#results">Results</a><a href="#apps">Applications</a><a href="#team">Team</a>
+    </div>
+    <a class="btn primary sm" href="console.html">Launch console</a>
   </div>
-  <div class="status" aria-label="System status">
-    <span class="chip" id="st-cam"><i></i>Camera</span>
-    <span class="chip" id="st-sensor"><i></i>Sensor</span>
-    <span class="chip" id="st-ai"><i></i>AI loading…</span>
+</nav>
+
+<header class="hero wrap" id="top">
+  <div class="hero-text">
+    <p class="eyebrow">Final Year Project Â· Computer Systems Engineering Â· MUST</p>
+    <h1>Concealed weapon detection with <span class="hl">RGB + thermal</span> sensor fusion</h1>
+    <p class="lede">A camera finds the shape of a gun. An infrared sensor checks its temperature. The alarm fires only when both agree, so a finger shaped like a gun is rejected, because skin is warm and metal is not.</p>
+    <div class="cta">
+      <a class="btn primary" href="console.html">Launch live console</a>
+      <a class="btn" href="#try">Try the alarm rule</a>
+    </div>
+    <ul class="facts mono">
+      <li><b>~0.5 s</b> to alarm</li><li><b>0.995</b> mAP50 (fusion net)</li><li><b>â‚¨6,180</b> hardware</li><li><b>100%</b> in-browser</li>
+    </ul>
   </div>
+  <figure class="hero-shot">
+    <img src="assets/console-preview.jpg" alt="The live console: a pistol boxed in red, the banner reads WEAPON DETECTED, the infrared card shows the temperature" width="1360" height="615">
+    <figcaption>The live console detecting a pistol. Camera shape + infrared reading â†’ one decision.</figcaption>
+  </figure>
 </header>
 
-<main class="layout">
-  <section class="stage-col">
-    <div id="banner" class="banner b-clear" aria-live="assertive">
-      <div class="b-title">SYSTEM IDLE</div><div class="b-sub">Start the camera to begin</div>
-    </div>
+<div class="jetbar" aria-hidden="true"></div>
 
-    <div class="stage" id="stage">
-      <video id="video" playsinline muted></video>
-      <canvas id="overlay"></canvas>
-      <div class="stage-empty" id="stage-empty">
-        <p>Camera is off</p>
-        <button class="btn primary" id="btn-cam-big">Start camera</button>
+<section class="wrap sec" id="try" aria-labelledby="try-h">
+  <p class="eyebrow">Interactive</p>
+  <h2 id="try-h">What the system decides for each object</h2>
+  <p class="muted">Pick what is held in front of the camera and sensor. This runs the same rule as the live console. Background is the 31.5 Â°C room we measured; readings marked <i>example</i> are typical values, not recordings.</p>
+  <div class="panel sim">
+    <div class="objects" id="objects"></div>
+    <div class="readout">
+      <div class="modes"><span class="muted">Alarm mode</span>
+        <div class="seg" role="group" aria-label="Alarm mode">
+          <button id="m-std" aria-pressed="true">Standard</button><button id="m-strict" aria-pressed="false">Strict (cold only)</button>
+        </div>
       </div>
-      <div class="stage-hud" id="hud"></div>
-      <button class="icon-btn fs" id="btn-fs" title="Fullscreen (F)" aria-label="Fullscreen">⛶</button>
-    </div>
-
-    <div class="controls">
-      <div class="ctl-group">
-        <button class="btn primary" id="btn-cam">Start camera</button>
-        <select id="cam-select" aria-label="Camera"><option value="">Default camera</option></select>
+      <div id="verdict" class="verdict" aria-live="polite"></div>
+      <div class="signals">
+        <div class="sig"><span class="lbl">Camera Â· shape</span><span class="val" id="s-cam"></span></div>
+        <div class="sig"><span class="lbl">Infrared Â· temperature</span><span class="val" id="s-th"></span></div>
       </div>
-      <div class="ctl-group">
-        <button class="btn" id="btn-sensor">Connect sensor</button>
-        <button class="btn" id="btn-cal" title="Point the sensor at empty space, then press (C)">Calibrate</button>
-        <label class="switch"><input type="checkbox" id="sim"><span>Simulate</span></label>
+      <div class="scale" aria-hidden="true">
+        <div class="bar"></div>
+        <div class="mark base" id="mk-base">background</div>
+        <div class="mark" id="mk-obj"></div>
+        <div class="ticks mono"><span>18 Â°C</span><span>23</span><span>28</span><span>33</span><span>38 Â°C</span></div>
       </div>
     </div>
-    <div class="sim-row" id="sim-row" hidden>
-      <label for="sim-t">Simulated object temperature <b id="sim-v" class="mono">31.0 °C</b></label>
-      <input type="range" id="sim-t" min="15" max="38" step="0.1" value="31">
-    </div>
-    <p class="note" id="note"></p>
-  </section>
+  </div>
+</section>
 
-  <aside class="side-col">
-    <div class="card" id="card-shape">
-      <div class="lbl">Camera · shape</div>
-      <div class="val" id="shape-val"><span class="pill grey">OFF</span></div>
-      <div class="det" id="shape-det">Camera not running</div>
-    </div>
+<section class="wrap sec" id="how" aria-labelledby="how-h">
+  <p class="eyebrow">How it works</p>
+  <h2 id="how-h">Two sensors, one decision</h2>
+  <div class="steps">
+    <article class="panel step"><span class="k mono">1 Â· Camera</span><h3>Shape</h3>
+      <p>A YOLO11n detector, trained on our own photos plus 302 vetted pistol images, looks for a weapon in every frame and labels how visible it is: hidden, half, partial or full.</p></article>
+    <article class="panel step"><span class="k mono">2 Â· Infrared</span><h3>Temperature</h3>
+      <p>An MLX90614 sensor on an ESP32 streams the object temperature ten times a second over USB. Each reading is compared with a background taken at start-up.</p></article>
+    <article class="panel step"><span class="k mono">3 Â· Fusion</span><h3>Decision</h3>
+      <p>The shape must hold for half a second. Any skin-warm reading in the last 0.8 s cancels it at once, so a finger never beeps, even while the sensor is still warming up.</p></article>
+  </div>
+  <pre class="rule mono">ALARM  = weapon shape  AND  NOT body heat        body heat = object â‰¥ background + 1.0 Â°C
+VETOED = weapon shape  AND  body heat            (finger gun: the camera is fooled, the sensor is not)</pre>
 
-    <div class="card">
-      <div class="lbl" id="th-lbl">Infrared · temperature</div>
-      <div class="temp-row"><span class="temp mono" id="th-temp">--.-</span><span class="unit">°C</span><span id="th-pill" class="pill amber">OFFLINE</span></div>
-      <div class="det mono" id="th-det">Connect the ESP32 or turn on Simulate</div>
-      <div class="scale">
-        <div class="jet"></div>
-        <div class="mk base" id="mk-base" title="Background" hidden></div>
-        <div class="mk obj" id="mk-obj" hidden></div>
-        <div class="ticks mono"><span>18</span><span>23</span><span>28</span><span>33</span><span>38 °C</span></div>
+  <h3 class="sub">Engineering</h3>
+  <div class="tech">
+    <div><b>Runs in the browser</b><p>No server. The camera plays natively at 30 fps and no video leaves the device.</p></div>
+    <div><b>GPU inference</b><p>ONNX Runtime Web on WebGPU, with automatic fallback to WASM on the CPU.</p></div>
+    <div><b>Never freezes</b><p>Detection runs in a Web Worker with one frame in flight. Late frames are dropped, and a watchdog restarts a stalled detector.</p></div>
+    <div><b>Direct to hardware</b><p>The ESP32 is read straight from the page with the Web Serial API.</p></div>
+    <div><b>Tested</b><p>The JS decoder matches Ultralytics on real validation images, and the browser runtime matches Python ONNX Runtime.</p></div>
+    <div><b>Two fusion levels</b><p>Decision-level fusion live; a dual-backbone cross-attention network for the research results.</p></div>
+  </div>
+</section>
+
+<section class="wrap sec" id="results" aria-labelledby="res-h">
+  <p class="eyebrow">Results</p>
+  <h2 id="res-h">Detection accuracy</h2>
+  <div class="panel table-wrap">
+    <table>
+      <thead><tr><th>Model</th><th>Precision</th><th>Recall</th><th>mAP50</th><th>mAP50-95</th></tr></thead>
+      <tbody>
+        <tr class="best"><td>Cross-attention fusion network (ours)</td><td>0.920</td><td>1.000</td><td>0.995</td><td>0.820</td></tr>
+        <tr><td>Late fusion of two detectors</td><td>0.875</td><td>0.944</td><td>0.987</td><td>0.519</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted small">12 held-out images. Five-fold cross-validation of late fusion: mAP50 0.932 Â± 0.052. The models were trained on physics-simulated thermal images, so treat these numbers as an upper bound until real thermal data is collected.</p>
+
+  <div class="two">
+    <div class="panel meas">
+      <p class="eyebrow">Measured with our sensor</p>
+      <div class="big mono">âˆ’3.19 Â°C</div>
+      <p>A shirt over a concealed weapon read <span class="mono">29.84 Â°C</span>, against <span class="mono">33.03 Â°C</span> for the same shirt with nothing under it, in a <span class="mono">31.49 Â°C</span> room.</p>
+      <p class="muted small">Our simulation assumed a 10â€“12 Â°C drop at 24 Â°C. The effect is real but shrinks in hot rooms, which matters for summer deployment in Pakistan.</p>
+    </div>
+    <div class="panel">
+      <div class="scale" aria-label="Measured temperatures on an 18 to 38 Â°C scale">
+        <div class="bar"></div>
+        <div class="mark" style="left:59.2%">over gun 29.8</div>
+        <div class="mark" style="left:80%">palm 34.0</div>
+        <div class="ticks mono"><span>18 Â°C</span><span>28</span><span>38 Â°C</span></div>
       </div>
-      <canvas id="spark" height="90" aria-label="Object temperature, last 30 seconds"></canvas>
+      <dl class="readings mono">
+        <dt>Palm</dt><dd>34.00 Â°C</dd><dt>Shirt, no weapon</dt><dd>33.03 Â°C</dd>
+        <dt>Room</dt><dd>31.49 Â°C</dd><dt>Shirt over weapon</dt><dd>29.84 Â°C</dd>
+      </dl>
     </div>
+  </div>
+</section>
 
-    <div class="card">
-      <div class="lbl">Fusion decision</div>
-      <div class="val" id="dec-val"><span class="pill grey">IDLE</span></div>
-      <div class="det mono" id="dec-rule">shape AND NOT body-heat</div>
+<section class="wrap sec" id="apps" aria-labelledby="apps-h">
+  <p class="eyebrow">Applications</p>
+  <h2 id="apps-h">From bench prototype to city-wide security</h2>
+  <ol class="stages panel">
+    <li class="now"><div class="when"><b>Stage 1</b>Built today</div><div class="body">
+      <h3>Bench-top fusion checkpoint</h3>
+      <p>Webcam plus infrared sensor on an ESP32. Detects a gun held at the sensor and rejects warm look-alikes such as a finger gun.</p>
+      <p class="where"><b>Where:</b> security-staff training, lab demonstrations, teaching sensor fusion.</p></div></li>
+    <li><div class="when"><b>Stage 2</b>Next step</div><div class="body">
+      <h3>Entry-gate screening kiosk</h3>
+      <p>Replace the single-point sensor with a 32Ã—24 thermal array so the thermal side sees shape too. A person stands about 1 m from the kiosk for a few seconds.</p>
+      <p class="where"><b>Where:</b> university and office gates, exam halls, banks, hospitals, courts.</p></div></li>
+    <li><div class="when"><b>Stage 3</b>Scale up</div><div class="body">
+      <h3>Smart CCTV add-on</h3>
+      <p>Pair existing CCTV with thermal cameras and run the fusion model on an edge computer. Guards get a phone alert with the frame attached.</p>
+      <p class="where"><b>Where:</b> shopping malls, railway and metro stations, stadiums, airports.</p></div></li>
+    <li><div class="when"><b>Stage 4</b>Go mobile</div><div class="body">
+      <h3>Handheld, wearable and drone units</h3>
+      <p>Compact versions for police checkpoints, body-worn cameras and drones over large crowds.</p>
+      <p class="where"><b>Where:</b> police checkpoints, rallies, concerts, border posts.</p></div></li>
+    <li><div class="when"><b>Stage 5</b>Vision</div><div class="body">
+      <h3>Networked security system</h3>
+      <p>Thermal and RGB combined with metal detectors and X-ray in one control room, each covering the others' blind spots, such as a weapon split into parts.</p>
+      <p class="where"><b>Where:</b> safe-city projects, critical infrastructure, VIP protection.</p></div></li>
+  </ol>
+</section>
+
+<section class="wrap sec" aria-labelledby="hw-h">
+  <p class="eyebrow">Hardware and limits</p>
+  <h2 id="hw-h">What the prototype is made of</h2>
+  <div class="two">
+    <div class="panel"><ul class="plain">
+      <li>ESP32 DevKit + MLX90614 infrared temperature sensor</li>
+      <li>USB webcam</li>
+      <li>YOLO11n detectors and a dual-backbone cross-attention fusion network</li>
+      <li>Browser console with alarm tone, desktop notification and CSV event log</li>
+      <li>Parts cost about <span class="mono">â‚¨6,180</span></li>
+    </ul></div>
+    <div class="panel"><ul class="plain">
+      <li>The infrared sensor is a single wide-angle point, so objects must be held within a few cm.</li>
+      <li>Training thermal images are simulated from photos; real thermal data collection is the next step.</li>
+      <li>A weapon taken apart and hidden in pieces is out of scope; that needs metal detection or X-ray.</li>
+    </ul></div>
+  </div>
+  <div class="cta center"><a class="btn primary" href="console.html">Launch live console</a></div>
+</section>
+
+<footer class="foot" id="team">
+  <div class="wrap foot-in">
+    <div>
+      <p class="eyebrow">Team</p>
+      <ul class="team">
+        <li><b>Uman Zafar</b> <span class="mono">FA22-CSE-054</span></li>
+        <li><b>Zeeshan Ali</b> <span class="mono">FA22-CSE-094</span></li>
+        <li><b>Mohsin Matloob</b> <span class="mono">FA22-CSE-019</span></li>
+        <li><b>Wajdan Naseem</b> <span class="mono">FA22-CSE-091</span></li>
+      </ul>
+      <p class="muted small">Supervisor: <b>Dr. Ashfaq Ahmed</b></p>
     </div>
-
-    <details class="card settings">
-      <summary>Settings</summary>
-      <div class="set">
-        <label for="mode">Alarm when</label>
-        <select id="mode"><option value="std">Shape + not body-warm (standard)</option><option value="strict">Shape + cold metal (strict)</option></select>
-      </div>
-      <div class="set"><label for="conf">Shape confidence <b class="mono" id="conf-v"></b></label><input type="range" id="conf" min="0.1" max="0.9" step="0.05" value="0.45"></div>
-      <div class="set"><label for="warm">Body-heat veto ΔT ≥ <b class="mono" id="warm-v"></b></label><input type="range" id="warm" min="0.3" max="5" step="0.1" value="1.0"></div>
-      <div class="set"><label for="cold">Cold-metal ΔT ≤ − <b class="mono" id="cold-v"></b></label><input type="range" id="cold" min="0.3" max="5" step="0.1" value="1.0"></div>
-      <div class="set">
-        <label for="size">Detector resolution</label>
-        <select id="size"><option value="416">416 px (accurate)</option><option value="320">320 px (fast)</option></select>
-      </div>
-      <label class="switch"><input type="checkbox" id="sound" checked><span>Alarm sound (M)</span></label>
-      <label class="switch"><input type="checkbox" id="notify"><span>Desktop notification on alarm</span></label>
-    </details>
-  </aside>
-
-  <section class="log-col card">
-    <div class="log-head">
-      <h2>Event log</h2>
-      <div><button class="btn small" id="btn-csv">Export CSV</button><button class="btn small" id="btn-clear">Clear</button></div>
+    <div class="muted small">
+      <p>Department of Computer Systems Engineering, Faculty of Engineering &amp; Technology, Mirpur University of Science and Technology (MUST), Session 2022â€“2026.</p>
+      <p>Thesis: â€œDual-Model Sensor Fusion for Concealed Weapon Detectionâ€.</p>
+      <p><a href="https://github.com/umanzafar/weapon-detection-fyp">Source code on GitHub</a></p>
     </div>
-    <div class="table-wrap">
-      <table><thead><tr><th>Time</th><th>Event</th><th>Shape</th><th>Object °C</th><th>ΔT</th></tr></thead>
-      <tbody id="log"><tr class="empty"><td colspan="5">No events yet. Alarms and rejected false alarms appear here.</td></tr></tbody></table>
-    </div>
-  </section>
-</main>
-
-<footer class="foot">
-  The thermal sensor is a single-point MLX90614 with a wide field of view: hold objects 1–3 cm from it.
-  Detector: YOLO11n trained on our own photos plus vetted pistol images. Runs fully in your browser; no video leaves this device.
+  </div>
 </footer>
 
-<div class="toast" id="toast" role="status" hidden></div>
-<script type="module" src="js/app.js"></script>
+<script>
+const BASE = 31.5, WARM = 1.0, COLD = 1.0, LO = 18, HI = 38;
+const OBJECTS = [
+  { n: "Finger shaped like a gun", shape: true, t: 34.0, src: "example", s: "Camera may be fooled; skin heat gives it away." },
+  { n: "Pistol at room temperature", shape: true, t: 31.3, src: "example", s: "Metal sits at room temperature, never at body heat." },
+  { n: "Chilled pistol", shape: true, t: 24.0, src: "example", s: "Clearly colder than background: metal signature." },
+  { n: "Mobile phone", shape: false, t: 31.2, src: "example", s: "Not gun-shaped, so no alarm whatever it reads." },
+  { n: "Open hand", shape: false, t: 34.0, src: "example", s: "Warm, but no weapon shape." },
+  { n: "Nothing in front", shape: false, t: 31.5, src: "background", s: "The calibrated background reading." },
+];
+let sel = 0, strict = false;
+const $ = id => document.getElementById(id);
+const pct = t => Math.max(0, Math.min(100, (t - LO) / (HI - LO) * 100));
+const thermal = t => { const d = t - BASE; return d >= WARM ? "WARM" : d <= -COLD ? "COLD" : "NEUTRAL"; };
+function decide(shape, th) {
+  if (!shape) return "CLEAR";
+  if (th === "WARM") return "VETOED";
+  if (strict && th !== "COLD") return "CLEAR";
+  return "ALARM";
+}
+$("objects").innerHTML = OBJECTS.map((o, i) =>
+  `<button class="obj" data-i="${i}" aria-pressed="${i === sel}"><span class="n">${o.n}</span>` +
+  `<span class="t mono">${o.t.toFixed(1)} Â°C</span><span class="s">${o.s}</span></button>`).join("");
+$("objects").addEventListener("click", e => { const b = e.target.closest(".obj"); if (b) { sel = +b.dataset.i; render(); } });
+$("m-std").onclick = () => { strict = false; render(); };
+$("m-strict").onclick = () => { strict = true; render(); };
+function render() {
+  const o = OBJECTS[sel], th = thermal(o.t), d = o.t - BASE, out = decide(o.shape, th);
+  document.querySelectorAll(".obj").forEach((b, i) => b.setAttribute("aria-pressed", i === sel));
+  $("m-std").setAttribute("aria-pressed", !strict); $("m-strict").setAttribute("aria-pressed", strict);
+  $("s-cam").innerHTML = o.shape ? '<span class="pill red">WEAPON SHAPE</span>' : '<span class="pill green">NONE</span>';
+  const p = { WARM: ["BODY HEAT", "red"], COLD: ["COLD", "blue"], NEUTRAL: ["BACKGROUND", "grey"] }[th];
+  $("s-th").innerHTML = `<span class="mono">${o.t.toFixed(1)} Â°C</span> <span class="pill ${p[1]}">${p[0]}</span>` +
+    `<br><span class="muted mono small">Î”T ${d >= 0 ? "+" : "âˆ’"}${Math.abs(d).toFixed(1)} Â°C Â· ${o.src}</span>`;
+  const V = {
+    ALARM: ["v-alarm", "Weapon detected", "Weapon shape seen and the temperature is not body heat."],
+    VETOED: ["v-ok", "False alarm rejected", "The shape looked like a gun, but the sensor reads skin temperature."],
+    CLEAR: ["v-ok", "Area clear", o.shape ? "Strict mode needs a clearly cold reading to confirm metal." : "No weapon shape in view."],
+  }[out];
+  $("verdict").className = "verdict " + V[0];
+  $("verdict").innerHTML = `<span class="v">${V[1].toUpperCase()}</span><span class="why">${V[2]}</span>`;
+  $("mk-base").style.left = pct(BASE) + "%";
+  $("mk-obj").style.left = pct(o.t) + "%";
+  $("mk-obj").textContent = o.t.toFixed(1);
+}
+render();
+</script>
 </body>
 </html>
